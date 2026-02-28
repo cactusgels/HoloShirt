@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hologram Shirt Demo</title>
+<style>
+  html, body { margin:0; height:100%; background:#f2f2f2; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; }
+  .wrap { min-height:100%; display:grid; place-items:center; padding:18px; box-sizing:border-box; }
+  .card { width:min(980px, 96vw); background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.08); padding:16px; box-sizing:border-box; }
+  .row { display:flex; gap:12px; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+  .title { margin:0; font-weight:800; font-size:16px; }
+  .hint { margin:0; color:#444; font-size:13px; line-height:1.35; max-width: 780px; }
+  .pill { font-size:12px; color:#222; background:#f6f6f6; border:1px solid #e8e8e8; border-radius:999px; padding:8px 10px; white-space:nowrap; }
+
+  .stage { margin-top:12px; width:100%; aspect-ratio:1/1; background:#fafafa; border:1px solid #eee; border-radius:14px; overflow:hidden; position:relative; perspective:1000px; }
+  .shirt3d { position:absolute; inset:0; transform-style:preserve-3d; will-change:transform; }
+
+  #shirtBg { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; user-select:none; }
+  #gl { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; }
+  #gl:active { cursor:grabbing; }
+
+  #flipText {
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform: translate(-50%,-50%);
+    pointer-events:none;
+    user-select:none;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 650;
+    color: rgba(240,240,240,0.92);
+    mix-blend-mode: screen;
+    text-shadow: 0 0 10px rgba(170,220,255,0.22), 0 0 12px rgba(255,90,220,0.16), 0 1px 0 rgba(0,0,0,0.35);
+    opacity: 0.95;
+    white-space: nowrap;
+  }
+
+  .debug { margin-top:10px; font-size:12px; color:#555; line-height:1.35; }
+  code { background:#f4f4f4; padding:1px 5px; border-radius:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="row">
+      <div>
+        <p class="title">Hologram shirt demo</p>
+        <p class="hint">
+          Drag left ↔ right on the shirt to flip between <b>&lt;1%</b> and <b>&gt;1%</b>.
+          Replace <code>images/lt.png</code> and <code>images/gt.png</code> to swap the hologram frames.
+        </p>
+      </div>
+      <div class="pill" id="pill">Loading…</div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="shirt3d" id="shirt3d">
+        <img id="shirtBg" alt="shirt" src="shirt.png" />
+        <canvas id="gl"></canvas>
+        <div id="flipText">&lt;1%</div>
+      </div>
+    </div>
+
+    <div class="debug" id="debug"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const shirt3d = document.getElementById('shirt3d');
+  const canvas = document.getElementById('gl');
+  const pill = document.getElementById('pill');
+  const debug = document.getElementById('debug');
+  const flipText = document.getElementById('flipText');
+
+  function dbg(msg) {
+    debug.innerHTML += String(msg).replace(/</g,'&lt;').replace(/>/g,'&gt;') + "<br>";
+  }
+
+  // ==========================================================
+  // CALIBRATION CONTROLS (edit these to match the printed ring)
+  // ==========================================================
+  const EYECENTER = { x: 0.505, y: 0.345 };
+  const EYERADIUS = 0.10;          // circle radius relative to stage width
+  const FLIPTEXT_GAP_PX = 10;      // text distance under circle (px)
+  // ==========================================================
+
+  function positionFlipText() {
+    const rect = stage.getBoundingClientRect();
+    const cx = EYECENTER.x * rect.width;
+    const cy = EYECENTER.y * rect.height;
+    const r  = EYERADIUS * rect.width;
+    flipText.style.left = cx + "px";
+    flipText.style.top  = (cy + r + FLIPTEXT_GAP_PX) + "px";
+    flipText.style.transform = "translate(-50%, 0)";
+  }
+
+  const ROT_MAX_DEG = 10;
+  const TILT_DEG = 1.2;
+
+  const gl = canvas.getContext('webgl', { alpha:true, antialias:true, premultipliedAlpha:true });
+  if(!gl) {
+    pill.textContent = "WebGL unavailable";
+    dbg("ERROR: WebGL context could not be created.");
+    return;
+  }
+
+  function resize() {
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    positionFlipText();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const VS = `
+    precision mediump float;
+    attribute vec2 aPos;
+    varying vec2 vUV;
+    void main() {
+      vUV = (aPos + 1.0) * 0.5;
+      gl_Position = vec4(aPos, 0.0, 1.0);
+    }
+  `;
+
+  const FS = `
+    precision mediump float;
+    varying vec2 vUV;
+
+    uniform sampler2D uLt;
+    uniform sampler2D uGt;
+
+    uniform vec2  uCenter;
+    uniform float uRadius;
+    uniform float uFlip;
+    uniform float uSpec;
+
+    float sstep(float a, float b, float x) {
+      float t = clamp((x-a)/(b-a), 0.0, 1.0);
+      return t*t*(3.0 - 2.0*t);
+    }
+
+    void main() {
+      vec2 d = vUV - uCenter;
+      float rr = length(d);
+
+      float edge = sstep(uRadius, uRadius - 0.010, rr);
+      if(edge <= 0.0) discard;
+
+      vec2 uvLocal = d * (0.5 / uRadius) + vec2(0.5, 0.5);
+      uvLocal = clamp(uvLocal, vec2(0.0, 0.0), vec2(1.0, 1.0));
+
+      vec4 lt = texture2D(uLt, uvLocal);
+      vec4 gt = texture2D(uGt, uvLocal);
+
+      float t = sstep(0.22, 0.78, uFlip);
+      vec3 col = mix(lt.rgb, gt.rgb, t);
+
+      float bandPos = uFlip * 1.10 - 0.05;
+      float band = 1.0 - abs((vUV.x + vUV.y*0.20) - bandPos);
+      band = clamp(band, 0.0, 1.0);
+      band = pow(band, 6.0) * 0.11;
+
+      float rim  = sstep(uRadius - 0.02, uRadius - 0.06, rr);
+      float vign = sstep(uRadius - 0.00, uRadius - 0.14, rr);
+      float rimDark = mix(0.97, 0.84, rim);
+      float vigDark = mix(1.00, 0.92, vign);
+
+      col *= rimDark * vigDark;
+      col += vec3(uSpec + band);
+
+      col *= edge;
+      gl_FragColor = vec4(col, edge);
+    }
+  `;
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(sh) || "shader compile failed");
+    }
+    return sh;
+  }
+
+  function makeProgram(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(p) || "program link failed");
+    }
+    return p;
+  }
+
+  let program;
+  try {
+    program = makeProgram(VS, FS);
+  } catch (e) {
+    pill.textContent = "Shader error";
+    dbg("ERROR: " + e.message);
+    return;
+  }
+  gl.useProgram(program);
+
+  const quad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,  1,-1,  -1, 1,  1, 1]), gl.STATIC_DRAW);
+
+  const aPos = gl.getAttribLocation(program, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const uCenter = gl.getUniformLocation(program, 'uCenter');
+  const uRadius = gl.getUniformLocation(program, 'uRadius');
+  const uFlip   = gl.getUniformLocation(program, 'uFlip');
+  const uSpec   = gl.getUniformLocation(program, 'uSpec');
+  const uLt     = gl.getUniformLocation(program, 'uLt');
+  const uGt     = gl.getUniformLocation(program, 'uGt');
+
+  gl.uniform2f(uCenter, EYECENTER.x, 1.0 - EYECENTER.y);
+  gl.uniform1f(uRadius, EYERADIUS);
+
+  // GitHub Pages-friendly relative paths
+  const LT_URL = "images/lt.png";
+  const GT_URL = "images/gt.png";
+
+  const MAX_TEX = 1024;
+
+  function loadAndDownscale(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        const scale = Math.min(1, MAX_TEX / Math.max(w, h));
+        const tw = Math.max(1, Math.round(w * scale));
+        const th = Math.max(1, Math.round(h * scale));
+        const c = document.createElement('canvas');
+        c.width = tw; c.height = th;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, tw, th);
+        resolve(c);
+      };
+      img.onerror = () => reject(new Error("Failed to load image: " + url));
+      img.src = url;
+    });
+  }
+
+  function uploadTextureFromCanvas(cnv, unit) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cnv);
+    return tex;
+  }
+
+  let dragging = false;
+  let rotYDeg = 0;
+  let rotYTargetDeg = 0;
+
+  function setFromClientX(clientX) {
+    const rect = stage.getBoundingClientRect();
+    const x01 = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    rotYTargetDeg = (x01 - 0.5) * 2 * ROT_MAX_DEG;
+  }
+
+  stage.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    stage.setPointerCapture(e.pointerId);
+    setFromClientX(e.clientX);
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    setFromClientX(e.clientX);
+  });
+  stage.addEventListener('pointerup', () => dragging = false);
+  stage.addEventListener('pointercancel', () => dragging = false);
+
+  Promise.all([loadAndDownscale(LT_URL), loadAndDownscale(GT_URL)]).then(([ltC, gtC]) => {
+    uploadTextureFromCanvas(ltC, 0);
+    uploadTextureFromCanvas(gtC, 1);
+    gl.uniform1i(uLt, 0);
+    gl.uniform1i(uGt, 1);
+
+    pill.textContent = "Ready — drag to rotate/flip";
+
+    function render() {
+      rotYDeg += (rotYTargetDeg - rotYDeg) * 0.14;
+
+      const tilt = Math.sin((rotYDeg/ROT_MAX_DEG) * Math.PI) * TILT_DEG;
+      shirt3d.style.transform = "rotateY(" + rotYDeg.toFixed(3) + "deg) rotateX(" + tilt.toFixed(3) + "deg)";
+
+      const flip = (rotYDeg / (2.0 * ROT_MAX_DEG)) + 0.5;
+      flipText.textContent = (flip >= 0.5) ? ">1%" : "<1%";
+
+      const yawRad = rotYDeg * Math.PI / 180.0;
+      const spec = Math.pow(Math.max(0.0, Math.cos(yawRad)), 8.0) * 0.18;
+
+      gl.clearColor(0,0,0,0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform1f(uFlip, flip);
+      gl.uniform1f(uSpec, spec);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      requestAnimationFrame(render);
+    }
+    render();
+  }).catch((e) => {
+    pill.textContent = "Image error (see debug)";
+    dbg("ERROR: " + (e && e.message ? e.message : e));
+  });
+})();
+</script>
+</body>
+</html>
