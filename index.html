@@ -107,6 +107,9 @@
     pill.textContent = "WebGL unavailable";
     dbg("ERROR: WebGL context could not be created.");
     return;
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   }
 
   function resize() {
