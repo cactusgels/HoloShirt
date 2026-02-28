@@ -20,7 +20,7 @@
   #gl { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; }
   #gl:active { cursor:grabbing; }
 
-  #flipText {
+  #flipText{
     position:absolute;
     left:50%;
     top:50%;
@@ -50,7 +50,7 @@
         <p class="title">Hologram shirt demo</p>
         <p class="hint">
           Drag left ↔ right on the shirt to flip between <b>&lt;1%</b> and <b>&gt;1%</b>.
-          Replace <code>lt.png</code> and <code>gt.png</code> to swap the hologram frames.
+          This version expects <code>shirt.png</code>, <code>lt.png</code>, and <code>gt.png</code> in the <b>same folder</b> as <code>index.html</code>.
         </p>
       </div>
       <div class="pill" id="pill">Loading…</div>
@@ -70,47 +70,49 @@
 
 <script>
 (() => {
-  const stage = document.getElementById('stage');
-  const shirt3d = document.getElementById('shirt3d');
-  const canvas = document.getElementById('gl');
-  const pill = document.getElementById('pill');
-  const debug = document.getElementById('debug');
-  const flipText = document.getElementById('flipText');
+  const stage = document.getElementById("stage");
+  const shirt3d = document.getElementById("shirt3d");
+  const canvas = document.getElementById("gl");
+  const pill = document.getElementById("pill");
+  const debug = document.getElementById("debug");
+  const flipText = document.getElementById("flipText");
 
   function dbg(msg) {
-    debug.innerHTML += String(msg).replace(/</g,'&lt;').replace(/>/g,'&gt;') + "<br>";
+    debug.innerHTML += String(msg).replace(/</g, "&lt;").replace(/>/g, "&gt;") + "<br>";
   }
 
   // ==========================================================
   // CALIBRATION CONTROLS (edit these to match the printed ring)
   // ==========================================================
   const EYECENTER = { x: 0.505, y: 0.345 };
-  const EYERADIUS = 0.10;          // circle radius relative to stage width
-  const FLIPTEXT_GAP_PX = 10;      // text distance under circle (px)
+  const EYERADIUS = 0.10;      // circle radius relative to stage width
+  const FLIPTEXT_GAP_PX = 10;  // text distance under circle (px)
   // ==========================================================
 
   function positionFlipText() {
     const rect = stage.getBoundingClientRect();
     const cx = EYECENTER.x * rect.width;
     const cy = EYECENTER.y * rect.height;
-    const r  = EYERADIUS * rect.width;
+    const r = EYERADIUS * rect.width;
     flipText.style.left = cx + "px";
-    flipText.style.top  = (cy + r + FLIPTEXT_GAP_PX) + "px";
+    flipText.style.top = (cy + r + FLIPTEXT_GAP_PX) + "px";
     flipText.style.transform = "translate(-50%, 0)";
   }
 
   const ROT_MAX_DEG = 10;
   const TILT_DEG = 1.2;
 
-  const gl = canvas.getContext('webgl', { alpha:true, antialias:true, premultipliedAlpha:true });
-  if(!gl) {
+  // NOTE: If you open via file://, texture loads may fail. Use GitHub Pages or a local http server.
+  const gl = canvas.getContext("webgl", { alpha: true, antialias: true, premultipliedAlpha: true });
+  if (!gl) {
     pill.textContent = "WebGL unavailable";
     dbg("ERROR: WebGL context could not be created.");
     return;
+  }
 
+  // Robust alpha compositing across browsers
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  }
 
   function resize() {
     const rect = stage.getBoundingClientRect();
@@ -120,7 +122,7 @@
     gl.viewport(0, 0, canvas.width, canvas.height);
     positionFlipText();
   }
-  window.addEventListener('resize', resize);
+  window.addEventListener("resize", resize);
   resize();
 
   const VS = `
@@ -188,7 +190,7 @@
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
-    if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
       throw new Error(gl.getShaderInfoLog(sh) || "shader compile failed");
     }
     return sh;
@@ -199,7 +201,7 @@
     gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
     gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
     gl.linkProgram(p);
-    if(!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       throw new Error(gl.getProgramInfoLog(p) || "program link failed");
     }
     return p;
@@ -219,63 +221,63 @@
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,  1,-1,  -1, 1,  1, 1]), gl.STATIC_DRAW);
 
-  const aPos = gl.getAttribLocation(program, 'aPos');
+  const aPos = gl.getAttribLocation(program, "aPos");
   gl.enableVertexAttribArray(aPos);
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-  const uCenter = gl.getUniformLocation(program, 'uCenter');
-  const uRadius = gl.getUniformLocation(program, 'uRadius');
-  const uFlip   = gl.getUniformLocation(program, 'uFlip');
-  const uSpec   = gl.getUniformLocation(program, 'uSpec');
-  const uLt     = gl.getUniformLocation(program, 'uLt');
-  const uGt     = gl.getUniformLocation(program, 'uGt');
+  const uCenter = gl.getUniformLocation(program, "uCenter");
+  const uRadius = gl.getUniformLocation(program, "uRadius");
+  const uFlip   = gl.getUniformLocation(program, "uFlip");
+  const uSpec   = gl.getUniformLocation(program, "uSpec");
+  const uLt     = gl.getUniformLocation(program, "uLt");
+  const uGt     = gl.getUniformLocation(program, "uGt");
 
   gl.uniform2f(uCenter, EYECENTER.x, 1.0 - EYECENTER.y);
   gl.uniform1f(uRadius, EYERADIUS);
 
-  // GitHub Pages-friendly relative paths
+  // Same-folder assets (index.html, shirt.png, lt.png, gt.png)
   const LT_URL = "lt.png";
   const GT_URL = "gt.png";
 
   const MAX_TEX = 1024;
 
+  // Helpful path diagnostics
+  dbg("Page: " + window.location.href);
+  dbg("LT resolves to: " + new URL(LT_URL, window.location.href).toString());
+  dbg("GT resolves to: " + new URL(GT_URL, window.location.href).toString());
+
   function loadAndDownscale(url) {
     const abs = new URL(url, window.location.href).toString();
     const cacheBust = abs + (abs.includes("?") ? "&" : "?") + "v=" + Date.now();
-  
+
     return new Promise((resolve, reject) => {
       const img = new Image();
-  
-      // Important: prevents canvas/WebGL security issues if the browser treats it as cross-origin
       img.crossOrigin = "anonymous";
-  
+
       img.onload = () => {
         try {
           const w = img.naturalWidth || img.width;
           const h = img.naturalHeight || img.height;
-  
+
           const scale = Math.min(1, MAX_TEX / Math.max(w, h));
           const tw = Math.max(1, Math.round(w * scale));
           const th = Math.max(1, Math.round(h * scale));
-  
+
           const c = document.createElement("canvas");
           c.width = tw; c.height = th;
-  
-          const ctx = c.getContext("2d", { willReadFrequently: false });
+
+          const ctx = c.getContext("2d", { willReadFrequently: false }) || c.getContext("2d");
+          if (!ctx) throw new Error("2D canvas context unavailable");
+
           ctx.clearRect(0, 0, tw, th);
           ctx.drawImage(img, 0, 0, tw, th);
-  
           resolve(c);
         } catch (err) {
           reject(new Error("Canvas draw failed for " + abs + " — " + err.message));
         }
       };
-  
-      img.onerror = () => {
-        reject(new Error("Failed to load image: " + abs));
-      };
-  
-      // cacheBust avoids GitHub Pages/CDN caching an old path or old file
+
+      img.onerror = () => reject(new Error("Failed to load image: " + abs));
       img.src = cacheBust;
     });
   }
@@ -303,51 +305,57 @@
     rotYTargetDeg = (x01 - 0.5) * 2 * ROT_MAX_DEG;
   }
 
-  stage.addEventListener('pointerdown', (e) => {
+  stage.addEventListener("pointerdown", (e) => {
     dragging = true;
     stage.setPointerCapture(e.pointerId);
     setFromClientX(e.clientX);
   });
-  stage.addEventListener('pointermove', (e) => {
-    if(!dragging) return;
+  stage.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
     setFromClientX(e.clientX);
   });
-  stage.addEventListener('pointerup', () => dragging = false);
-  stage.addEventListener('pointercancel', () => dragging = false);
+  stage.addEventListener("pointerup", () => dragging = false);
+  stage.addEventListener("pointercancel", () => dragging = false);
 
-  Promise.all([loadAndDownscale(LT_URL), loadAndDownscale(GT_URL)]).then(([ltC, gtC]) => {
-    uploadTextureFromCanvas(ltC, 0);
-    uploadTextureFromCanvas(gtC, 1);
-    gl.uniform1i(uLt, 0);
-    gl.uniform1i(uGt, 1);
+  Promise.all([loadAndDownscale(LT_URL), loadAndDownscale(GT_URL)])
+    .then(([ltC, gtC]) => {
+      uploadTextureFromCanvas(ltC, 0);
+      uploadTextureFromCanvas(gtC, 1);
+      gl.uniform1i(uLt, 0);
+      gl.uniform1i(uGt, 1);
 
-    pill.textContent = "Ready — drag to rotate/flip";
+      pill.textContent = "Ready — drag to rotate/flip";
 
-    function render() {
-      rotYDeg += (rotYTargetDeg - rotYDeg) * 0.14;
+      function render() {
+        rotYDeg += (rotYTargetDeg - rotYDeg) * 0.14;
 
-      const tilt = Math.sin((rotYDeg/ROT_MAX_DEG) * Math.PI) * TILT_DEG;
-      shirt3d.style.transform = "rotateY(" + rotYDeg.toFixed(3) + "deg) rotateX(" + tilt.toFixed(3) + "deg)";
+        const tilt = Math.sin((rotYDeg / ROT_MAX_DEG) * Math.PI) * TILT_DEG;
+        shirt3d.style.transform =
+          "rotateY(" + rotYDeg.toFixed(3) + "deg) rotateX(" + tilt.toFixed(3) + "deg)";
 
-      const flip = (rotYDeg / (2.0 * ROT_MAX_DEG)) + 0.5;
-      flipText.textContent = (flip >= 0.5) ? ">1%" : "<1%";
+        const flip = (rotYDeg / (2.0 * ROT_MAX_DEG)) + 0.5;
+        flipText.textContent = (flip >= 0.5) ? ">1%" : "<1%";
 
-      const yawRad = rotYDeg * Math.PI / 180.0;
-      const spec = Math.pow(Math.max(0.0, Math.cos(yawRad)), 8.0) * 0.18;
+        const yawRad = rotYDeg * Math.PI / 180.0;
+        const spec = Math.pow(Math.max(0.0, Math.cos(yawRad)), 8.0) * 0.18;
 
-      gl.clearColor(0,0,0,0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.uniform1f(uFlip, flip);
-      gl.uniform1f(uSpec, spec);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.uniform1f(uFlip, flip);
+        gl.uniform1f(uSpec, spec);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-      requestAnimationFrame(render);
-    }
-    render();
-  }).catch((e) => {
-    pill.textContent = "Image error (see debug)";
-    dbg("ERROR: " + (e && e.message ? e.message : e));
-  });
+        requestAnimationFrame(render);
+      }
+
+      render();
+    })
+    .catch((e) => {
+      pill.textContent = "Image error (see debug)";
+      dbg("ERROR: " + (e && e.message ? e.message : e));
+      dbg("TIP: Ensure lt.png and gt.png are in the repo root next to index.html (case-sensitive).");
+      dbg("TIP: Hard refresh: Ctrl+F5 after committing.");
+    });
 })();
 </script>
 </body>
