@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Hologram Shirt Demo</title>
 <style>
+  /* Prevent iOS/Safari “text autosizing” that can blow up overlay text */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
   html, body { margin:0; height:100%; background:#f2f2f2; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; }
   .wrap { min-height:100%; display:grid; place-items:center; padding:18px; box-sizing:border-box; }
   .card { width:min(980px, 96vw); background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.08); padding:16px; box-sizing:border-box; }
@@ -27,15 +30,19 @@
     transform: translate(-50%,-50%);
     pointer-events:none;
     user-select:none;
-    font-size: 22.5px;
+
+    /* IMPORTANT: font-size is now set dynamically in JS based on stage width */
     letter-spacing: 0.18em;
     text-transform: uppercase;
     font-weight: 675;
+
     color: rgba(240,240,240,0.92);
     mix-blend-mode: screen;
     text-shadow: 0 0 10px rgba(170,220,255,0.22), 0 0 12px rgba(255,90,220,0.16), 0 1px 0 rgba(0,0,0,0.35);
     opacity: 0.95;
+
     white-space: nowrap;
+    line-height: 1; /* keeps mobile font metrics from adding extra height */
   }
 
   .debug { margin-top:10px; font-size:12px; color:#555; line-height:1.35; }
@@ -48,9 +55,7 @@
     <div class="row">
       <div>
         <p class="title">Hologram shirt demo</p>
-        <p class="hint">
-          Drag left ↔ right on the shirt to flip between <b>&lt;1%</b> and <b>&gt;1%</b>.
-        </p>
+        <p class="hint">Drag left ↔ right on the shirt to flip between <b>&lt;1%</b> and <b>&gt;1%</b>.</p>
       </div>
       <div class="pill" id="pill">Loading…</div>
     </div>
@@ -84,24 +89,37 @@
   // CALIBRATION CONTROLS (edit these to match the printed ring)
   // ==========================================================
   const EYECENTER = { x: 0.510, y: 0.308 };
-  const EYERADIUS = 0.145;      // circle radius relative to stage width
-  const FLIPTEXT_GAP_PX = 1;  // text distance under circle (px)
+  const EYERADIUS = 0.145;   // circle radius relative to stage width
+  const FLIPTEXT_GAP_PX = 1; // text distance under circle (px)
+
+  // Responsive flip-text sizing (FIXES mobile)
+  const FLIPTEXT_SIZE_MIN_PX = 14;  // smallest on tiny phones
+  const FLIPTEXT_SIZE_MAX_PX = 30;  // cap for desktop
+  const FLIPTEXT_SIZE_K = 0.060;    // stageWidth * K (tune if needed)
   // ==========================================================
 
   function positionFlipText() {
     const rect = stage.getBoundingClientRect();
     const cx = EYECENTER.x * rect.width;
     const cy = EYECENTER.y * rect.height;
-    const r = EYERADIUS * rect.width;
+    const r  = EYERADIUS * rect.width;
+
+    // Position under the circle
     flipText.style.left = cx + "px";
-    flipText.style.top = (cy + r + FLIPTEXT_GAP_PX) + "px";
+    flipText.style.top  = (cy + r + FLIPTEXT_GAP_PX) + "px";
     flipText.style.transform = "translate(-50%, 0)";
+
+    // Font size tied to STAGE width (not viewport) + clamped
+    const fs = Math.max(
+      FLIPTEXT_SIZE_MIN_PX,
+      Math.min(FLIPTEXT_SIZE_MAX_PX, rect.width * FLIPTEXT_SIZE_K)
+    );
+    flipText.style.fontSize = fs.toFixed(2) + "px";
   }
 
   const ROT_MAX_DEG = 10;
   const TILT_DEG = 1.2;
 
-  // NOTE: If you open via file://, texture loads may fail. Use GitHub Pages or a local http server.
   const gl = canvas.getContext("webgl", { alpha: true, antialias: true, premultipliedAlpha: true });
   if (!gl) {
     pill.textContent = "WebGL unavailable";
@@ -109,7 +127,6 @@
     return;
   }
 
-  // Robust alpha compositing across browsers
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -234,13 +251,10 @@
   gl.uniform2f(uCenter, EYECENTER.x, 1.0 - EYECENTER.y);
   gl.uniform1f(uRadius, EYERADIUS);
 
-  // Same-folder assets (index.html, shirt.png, lt.png, gt.png)
   const LT_URL = "lt.png";
   const GT_URL = "gt.png";
-
   const MAX_TEX = 1024;
 
-  // Helpful path diagnostics
   dbg("Page: " + window.location.href);
   dbg("LT resolves to: " + new URL(LT_URL, window.location.href).toString());
   dbg("GT resolves to: " + new URL(GT_URL, window.location.href).toString());
