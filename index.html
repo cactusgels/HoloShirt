@@ -50,7 +50,6 @@
         <p class="title">Hologram shirt demo</p>
         <p class="hint">
           Drag left ↔ right on the shirt to flip between <b>&lt;1%</b> and <b>&gt;1%</b>.
-          This version expects <code>shirt.png</code>, <code>lt.png</code>, and <code>gt.png</code> in the <b>same folder</b> as <code>index.html</code>.
         </p>
       </div>
       <div class="pill" id="pill">Loading…</div>
@@ -86,7 +85,7 @@
   // ==========================================================
   const EYECENTER = { x: 0.524, y: 0.308 };
   const EYERADIUS = 0.145;      // circle radius relative to stage width
-  const FLIPTEXT_GAP_PX = 3;  // text distance under circle (px)
+  const FLIPTEXT_GAP_PX = 1.5;  // text distance under circle (px)
   // ==========================================================
 
   function positionFlipText() {
