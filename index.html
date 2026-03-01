@@ -110,7 +110,7 @@
     flipText.style.lineHeight = "1";
   
     // Size based on circle radius (more consistent across devices)
-    const fsRaw = r * 0.42;          // <- tune this one number
+    const fsRaw = r * 0.38;          // <- tune this one number
     const fs = Math.max(12, Math.min(30, fsRaw));  // clamps
   
     flipText.style.setProperty("font-size", fs.toFixed(2) + "px", "important");
