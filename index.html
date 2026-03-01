@@ -103,18 +103,17 @@
     const cx = EYECENTER.x * rect.width;
     const cy = EYECENTER.y * rect.height;
     const r  = EYERADIUS * rect.width;
-
-    // Position under the circle
+  
     flipText.style.left = cx + "px";
     flipText.style.top  = (cy + r + FLIPTEXT_GAP_PX) + "px";
     flipText.style.transform = "translate(-50%, 0)";
-
-    // Font size tied to STAGE width (not viewport) + clamped
-    const fs = Math.max(
-      FLIPTEXT_SIZE_MIN_PX,
-      Math.min(FLIPTEXT_SIZE_MAX_PX, rect.width * FLIPTEXT_SIZE_K)
-    );
-    flipText.style.fontSize = fs.toFixed(2) + "px";
+    flipText.style.lineHeight = "1";
+  
+    // Size based on circle radius (more consistent across devices)
+    const fsRaw = r * 0.42;          // <- tune this one number
+    const fs = Math.max(12, Math.min(30, fsRaw));  // clamps
+  
+    flipText.style.setProperty("font-size", fs.toFixed(2) + "px", "important");
   }
 
   const ROT_MAX_DEG = 10;
