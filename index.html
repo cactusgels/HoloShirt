@@ -50,23 +50,28 @@
         <img id="shirtBg" alt="shirt" src="shirt.png" />
         <canvas id="gl"></canvas>
 
-        <!-- SVG overlay (replaces the HTML flipText div) -->
+        <!-- SVG overlay -->
         <svg id="overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-          <text id="flipTextSvg"
-                x="500" y="500"
-                text-anchor="middle"
-                dominant-baseline="hanging"
-                fill="rgba(240,240,240,0.92)"
-                font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
-                font-weight="675"
-                letter-spacing="0.18em"
-                style="
-                  mix-blend-mode: screen;
-                  paint-order: stroke;
-                  stroke: rgba(0,0,0,0.35);
-                  stroke-width: 2.0;
-                "
-          >&lt;1%</text>
+          <text
+            id="flipTextSvg"
+            x="500" y="500"
+            text-anchor="middle"
+            dominant-baseline="hanging"
+            fill="rgba(240,240,240,0.92)"
+            font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+            font-weight="675"
+            letter-spacing="0.18em"
+            style="
+              mix-blend-mode: screen;
+              paint-order: stroke;
+              stroke: rgba(0,0,0,0.35);
+              stroke-width: 2.0;
+            "
+          >
+            <tspan id="symLt">&lt;</tspan>
+            <tspan id="symGt" opacity="0">&gt;</tspan>
+            <tspan id="pct">1%</tspan>
+          </text>
         </svg>
       </div>
     </div>
@@ -82,10 +87,19 @@
   const canvas = document.getElementById("gl");
   const pill = document.getElementById("pill");
   const debug = document.getElementById("debug");
-  const flipTextSvg = document.getElementById("flipTextSvg");
 
   function dbg(msg) {
     debug.innerHTML += String(msg).replace(/</g, "&lt;").replace(/>/g, "&gt;") + "<br>";
+  }
+
+  const flipTextSvg = document.getElementById("flipTextSvg");
+  const symLt = document.getElementById("symLt");
+  const symGt = document.getElementById("symGt");
+
+  if (!flipTextSvg || !symLt || !symGt) {
+    pill.textContent = "SVG error";
+    dbg("ERROR: Missing #flipTextSvg and/or #symLt/#symGt tspans. Check the SVG markup.");
+    return;
   }
 
   // ==========================================================
@@ -95,8 +109,7 @@
   const EYERADIUS = 0.145;   // relative to stage width
   const FLIPTEXT_GAP_PX = 2; // px gap below circle
 
-  // ONE KNOB for text size (relative to circle radius):
-  // smaller number = smaller text. Try 0.34–0.40.
+  // ONE KNOB for text size (relative to circle radius)
   const FLIPTEXT_RADIUS_K = 0.17;
 
   // clamp in SVG units (viewBox is 1000x1000)
@@ -115,7 +128,7 @@
     const cyPx = EYECENTER.y * rect.height;
     const rPx  = EYERADIUS * rect.width;
 
-    const x = (cxPx / rect.width)  * vw;
+    const x = (cxPx / rect.width) * vw;
     const yCircleBottom = ((cyPx + rPx + FLIPTEXT_GAP_PX) / rect.height) * vh;
 
     // font size from radius, but in SVG units
@@ -126,8 +139,6 @@
     flipTextSvg.setAttribute("x", x.toFixed(3));
     flipTextSvg.setAttribute("y", yCircleBottom.toFixed(3));
     flipTextSvg.setAttribute("font-size", fs.toFixed(2));
-
-    // crispness: avoid Safari rounding weirdness
     flipTextSvg.setAttribute("text-rendering", "geometricPrecision");
   }
 
@@ -221,7 +232,7 @@
     const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
     return t * t * (3 - 2 * t);
   }
-  
+
   function compile(type, src) {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
@@ -350,9 +361,16 @@
           "rotateY(" + rotYDeg.toFixed(3) + "deg) rotateX(" + tilt.toFixed(3) + "deg)";
 
         const flip = (rotYDeg / (2.0 * ROT_MAX_DEG)) + 0.5;
-        const t = smoothstep(0.22, 0.78, flip);   // 0..1
+
+        // ONLY transition the < and > symbols (1% stays stable)
+        const t = smoothstep(0.22, 0.78, flip); // 0..1
         symLt.setAttribute("opacity", (1 - t).toFixed(3));
         symGt.setAttribute("opacity", (t).toFixed(3));
+
+        // Reset dx so it doesn't accumulate oddly in some SVG engines
+        symLt.setAttribute("dx", "0");
+        symGt.setAttribute("dx", "0");
+
         const shimmer = Math.sin(performance.now() * 0.012 + flip * 6.0) * 0.35;
         symLt.setAttribute("dx", (-t * 6 + shimmer).toFixed(2));
         symGt.setAttribute("dx", ((1 - t) * 6 + shimmer).toFixed(2));
