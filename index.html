@@ -217,6 +217,11 @@
     }
   `;
 
+  function smoothstep(a, b, x) {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  }
+  
   function compile(type, src) {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
@@ -345,7 +350,9 @@
           "rotateY(" + rotYDeg.toFixed(3) + "deg) rotateX(" + tilt.toFixed(3) + "deg)";
 
         const flip = (rotYDeg / (2.0 * ROT_MAX_DEG)) + 0.5;
-        flipTextSvg.textContent = (flip >= 0.5) ? ">1%" : "<1%";
+        const t = smoothstep(0.22, 0.78, flip);   // 0..1
+        symLt.setAttribute("opacity", (1 - t).toFixed(3));
+        symGt.setAttribute("opacity", (t).toFixed(3));
 
         const yawRad = rotYDeg * Math.PI / 180.0;
         const spec = Math.pow(Math.max(0.0, Math.cos(yawRad)), 8.0) * 0.18;
