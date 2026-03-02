@@ -20,7 +20,6 @@
   #gl { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; }
   #gl:active { cursor:grabbing; }
 
-  /* SVG overlay sits above WebGL */
   #overlay {
     position:absolute;
     inset:0;
@@ -50,10 +49,9 @@
         <img id="shirtBg" alt="shirt" src="shirt.png" />
         <canvas id="gl"></canvas>
 
-        <!-- SVG overlay -->
         <svg id="overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-          <!-- Join point: symbol ends here, pct starts here -->
-          <text id="symText"
+          <!-- < symbol (end-anchored at join X) -->
+          <text id="symLtText"
                 x="500" y="500"
                 text-anchor="end"
                 dominant-baseline="hanging"
@@ -66,13 +64,28 @@
                   stroke: rgba(0,0,0,0.35);
                   stroke-width: 2.0;
                   text-rendering: geometricPrecision;
-                ">
-            <tspan id="symLt">&lt;</tspan>
-            <tspan id="symGt" opacity="0">&gt;</tspan>
-          </text>
+                ">&lt;</text>
 
-          <text id="pctText"
+          <!-- > symbol (OVERLAID at exact same x/y as <) -->
+          <text id="symGtText"
                 x="500" y="500"
+                text-anchor="end"
+                dominant-baseline="hanging"
+                fill="rgba(240,240,240,0.92)"
+                font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+                font-weight="675"
+                opacity="0"
+                style="
+                  mix-blend-mode: screen;
+                  paint-order: stroke;
+                  stroke: rgba(0,0,0,0.35);
+                  stroke-width: 2.0;
+                  text-rendering: geometricPrecision;
+                ">&gt;</text>
+
+          <!-- Stable 1% (start-anchored from join X + gap) -->
+          <text id="pctText"
+                x="506" y="500"
                 text-anchor="start"
                 dominant-baseline="hanging"
                 fill="rgba(240,240,240,0.92)"
@@ -105,14 +118,13 @@
     debug.innerHTML += String(msg).replace(/</g, "&lt;").replace(/>/g, "&gt;") + "<br>";
   }
 
-  const symText = document.getElementById("symText");
-  const pctText = document.getElementById("pctText");
-  const symLt = document.getElementById("symLt");
-  const symGt = document.getElementById("symGt");
+  const symLtText = document.getElementById("symLtText");
+  const symGtText = document.getElementById("symGtText");
+  const pctText   = document.getElementById("pctText");
 
-  if (!symText || !pctText || !symLt || !symGt) {
+  if (!symLtText || !symGtText || !pctText) {
     pill.textContent = "SVG error";
-    dbg("ERROR: Missing SVG ids (#symText/#pctText/#symLt/#symGt).");
+    dbg("ERROR: Missing SVG ids (#symLtText/#symGtText/#pctText).");
     return;
   }
 
@@ -123,19 +135,17 @@
   const EYERADIUS = 0.145;   // relative to stage width
   const FLIPTEXT_GAP_PX = 2; // px gap below circle
 
-  // Text sizing relative to circle radius (in SVG units)
+  // Text size relative to circle radius (in SVG units)
   const FLIPTEXT_RADIUS_K = 0.17;
   const FLIPTEXT_MIN = 18;
   const FLIPTEXT_MAX = 60;
 
-  // Join point and optional tiny gap between symbol and "1%"
-  const JOIN_X = 500;     // in viewBox units
-  const GAP_X  = 6;       // in viewBox units (increase/decrease for spacing)
+  // Small gap between symbol and "1%" (viewBox units)
+  const GAP_X = 6; // tune 4–10
   // ==========================================================
 
   function positionOverlayText() {
     const rect = stage.getBoundingClientRect();
-
     const vw = 1000;
     const vh = 1000;
 
@@ -143,24 +153,26 @@
     const cyPx = EYECENTER.y * rect.height;
     const rPx  = EYERADIUS * rect.width;
 
+    const xJoin = (cxPx / rect.width) * vw;
     const y = ((cyPx + rPx + FLIPTEXT_GAP_PX) / rect.height) * vh;
 
-    // font size from radius, in SVG units
     const rSvg = (rPx / rect.width) * vw;
     const fsRaw = rSvg * FLIPTEXT_RADIUS_K;
     const fs = Math.max(FLIPTEXT_MIN, Math.min(FLIPTEXT_MAX, fsRaw));
 
-    // If you ever want to move the whole label left/right with the circle:
-    const x = (cxPx / rect.width) * vw;
+    // Overlay BOTH symbols at same x/y
+    symLtText.setAttribute("x", xJoin.toFixed(3));
+    symGtText.setAttribute("x", xJoin.toFixed(3));
 
-    // Join point moves with circle center; pct gets a tiny gap to the right
-    symText.setAttribute("x", (x).toFixed(3));
-    pctText.setAttribute("x", (x + GAP_X).toFixed(3));
+    symLtText.setAttribute("y", y.toFixed(3));
+    symGtText.setAttribute("y", y.toFixed(3));
 
-    symText.setAttribute("y", y.toFixed(3));
+    // Stable 1% starts at join + gap
+    pctText.setAttribute("x", (xJoin + GAP_X).toFixed(3));
     pctText.setAttribute("y", y.toFixed(3));
 
-    symText.setAttribute("font-size", fs.toFixed(2));
+    symLtText.setAttribute("font-size", fs.toFixed(2));
+    symGtText.setAttribute("font-size", fs.toFixed(2));
     pctText.setAttribute("font-size", fs.toFixed(2));
   }
 
@@ -384,14 +396,10 @@
 
         const flip = (rotYDeg / (2.0 * ROT_MAX_DEG)) + 0.5;
 
-        // ONLY transition the < and > symbols (in place). 1% is a separate text node, so it never moves.
+        // Only the symbols transition; they occupy the exact same x/y.
         const t = smoothstep(0.22, 0.78, flip);
-        symLt.setAttribute("opacity", (1 - t).toFixed(3));
-        symGt.setAttribute("opacity", (t).toFixed(3));
-
-        // Optional subtle "hologram shimmer" without moving anything:
-        const shimmer = 0.10 * Math.sin(performance.now() * 0.010 + flip * 6.0);
-        symText.setAttribute("opacity", (1.0 - Math.abs(t - 0.5) * 0.10 + shimmer).toFixed(3));
+        symLtText.setAttribute("opacity", (1 - t).toFixed(3));
+        symGtText.setAttribute("opacity", (t).toFixed(3));
 
         const yawRad = rotYDeg * Math.PI / 180.0;
         const spec = Math.pow(Math.max(0.0, Math.cos(yawRad)), 8.0) * 0.18;
