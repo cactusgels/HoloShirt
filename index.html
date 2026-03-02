@@ -353,6 +353,9 @@
         const t = smoothstep(0.22, 0.78, flip);   // 0..1
         symLt.setAttribute("opacity", (1 - t).toFixed(3));
         symGt.setAttribute("opacity", (t).toFixed(3));
+        const shimmer = Math.sin(performance.now() * 0.012 + flip * 6.0) * 0.35;
+        symLt.setAttribute("dx", (-t * 6 + shimmer).toFixed(2));
+        symGt.setAttribute("dx", ((1 - t) * 6 + shimmer).toFixed(2));
 
         const yawRad = rotYDeg * Math.PI / 180.0;
         const spec = Math.pow(Math.max(0.0, Math.cos(yawRad)), 8.0) * 0.18;
