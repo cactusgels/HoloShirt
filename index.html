@@ -142,6 +142,8 @@
 
   // Small gap between symbol and "1%" (viewBox units)
   const GAP_X = 6; // tune 4–10
+  const LABEL_SHIFT_X = -12; // negative = left, positive = right (try -6 to -20)
+  const LABEL_SHIFT_Y = 0; // positive = down, negative = up
   // ==========================================================
 
   function positionOverlayText() {
@@ -153,8 +155,8 @@
     const cyPx = EYECENTER.y * rect.height;
     const rPx  = EYERADIUS * rect.width;
 
-    const xJoin = (cxPx / rect.width) * vw;
-    const y = ((cyPx + rPx + FLIPTEXT_GAP_PX) / rect.height) * vh;
+    const xJoin = (cxPx / rect.width) * vw + LABEL_SHIFT_X;
+    const y = ((cyPx + rPx + FLIPTEXT_GAP_PX) / rect.height) * vh + LABEL_SHIFT_Y;
 
     const rSvg = (rPx / rect.width) * vw;
     const fsRaw = rSvg * FLIPTEXT_RADIUS_K;
